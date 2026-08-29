@@ -171,77 +171,164 @@ def render_kpi_card(title, value, delta=None, delta_text="", help_text=None):
         </div>
     """, unsafe_allow_html=True)
 
-def plot_index_line_chart(df, date_col='date', val_col='index_value', title="Airfare Price Index Trend"):
+def plot_index_line_chart(
+    df,
+    date_col='date',
+    val_col='index_value',
+    title="Airfare Price Index Trend",
+    xaxis_title="Observation Date",
+    yaxis_title="Index Value (Base = 100)",
+    height=320,
+    show_daily_markers=False,
+    center_on_base=False,
+    series_name="Index Value",
+):
     """
     Renders a professional line chart for index values.
+
+    Optional presentation flags default off so Dashboard and Route Analysis
+    keep their existing chart appearance.
     """
     fig = go.Figure()
-    
-    # Calculate range to ensure Base Index = 100 is always visible and chart is zoomed in
-    min_val = df[val_col].min()
-    max_val = df[val_col].max()
-    
-    # Add a dynamic y-axis padding to zoom in while guaranteeing 100 is visible
-    padding = max(0.5, (max_val - min_val) * 0.15) if max_val != min_val else 1.0
-    y_min = min(99.0, min_val - padding)
-    y_max = max(101.0, max_val + padding)
-    
-    fig.add_trace(go.Scatter(
+
+    min_val = float(df[val_col].min())
+    max_val = float(df[val_col].max())
+    n_points = len(df)
+
+    if center_on_base:
+        max_dev = max(abs(min_val - 100.0), abs(max_val - 100.0), 0.75)
+        padding = max(0.35, max_dev * 0.18)
+        y_min = 100.0 - max_dev - padding
+        y_max = 100.0 + max_dev + padding
+    else:
+        padding = max(0.5, (max_val - min_val) * 0.15) if max_val != min_val else 1.0
+        y_min = min(99.0, min_val - padding)
+        y_max = max(101.0, max_val + padding)
+
+    marker_size = 7 if n_points <= 14 else (6 if n_points <= 40 else 4)
+    scatter_mode = "lines+markers" if show_daily_markers else "lines"
+
+    presentation = show_daily_markers or center_on_base
+    hover = (
+        "Date: %{x|%d %b %Y}<br>" + series_name + ": %{y:.2f}<extra></extra>"
+        if presentation
+        else "Date: %{x}<br>Index: %{y:.2f}<extra></extra>"
+    )
+
+    scatter_kwargs = dict(
         x=df[date_col],
         y=df[val_col],
-        mode='lines',
-        line=dict(color='#0d9488', width=3), # Thicker Teal line
-        name='Index Value',
-        hovertemplate='Date: %{x}<br>Index: %{y:.2f}<extra></extra>'
-    ))
-    
-    fig.update_layout(
-        title=dict(
-            text=title,
-            font=dict(size=14, color='#0f2d59', family='Inter')
-        ),
-        xaxis=dict(
-            title=dict(text="Observation Date", font=dict(color='#64748b')),
-            gridcolor='#f1f5f9',
-            linecolor='#cbd5e1',
-            tickfont=dict(color='#64748b')
-        ),
-        yaxis=dict(
-            title=dict(text="Index Value (Base = 100)", font=dict(color='#64748b')),
-            gridcolor='#e2e8f0',
-            linecolor='#cbd5e1',
-            tickfont=dict(color='#64748b'),
-            zeroline=False,
-            range=[y_min, y_max] # Enforce clean zoomed range including 100
-        ),
-        plot_bgcolor='white',
-        paper_bgcolor='white',
-        margin=dict(l=15, r=15, t=40, b=15),
-        height=320,
-        hovermode="x unified"
+        mode=scatter_mode,
+        line=dict(color="#0d9488", width=3),
+        name=series_name,
+        hovertemplate=hover,
     )
-    
-    # Add base 100 horizontal reference line
+    if show_daily_markers:
+        scatter_kwargs["marker"] = dict(
+            color="#0d9488",
+            size=marker_size,
+            line=dict(width=1, color="#ffffff"),
+        )
+    fig.add_trace(go.Scatter(**scatter_kwargs))
+
+    if presentation:
+        xaxis_cfg = dict(
+            title=dict(text=xaxis_title, font=dict(color="#64748b", size=12)),
+            gridcolor="#f1f5f9",
+            linecolor="#cbd5e1",
+            tickfont=dict(color="#64748b", size=11),
+            automargin=True,
+            tickformat="%d %b",
+            showgrid=True,
+        )
+        if n_points <= 10:
+            xaxis_cfg["dtick"] = 86400000
+            xaxis_cfg["tickangle"] = 0
+        elif n_points <= 35:
+            xaxis_cfg["nticks"] = min(12, n_points)
+            xaxis_cfg["tickangle"] = -30
+        else:
+            xaxis_cfg["nticks"] = 10
+            xaxis_cfg["tickangle"] = -35
+
+        fig.update_layout(
+            title=dict(
+                text=title,
+                font=dict(size=16, color="#0f2d59", family="Inter"),
+                x=0,
+                xanchor="left",
+            ),
+            xaxis=xaxis_cfg,
+            yaxis=dict(
+                title=dict(text=yaxis_title, font=dict(color="#64748b", size=12)),
+                gridcolor="#e2e8f0",
+                linecolor="#cbd5e1",
+                tickfont=dict(color="#64748b", size=11),
+                zeroline=False,
+                range=[y_min, y_max],
+                automargin=True,
+                tickformat=".2f",
+            ),
+            plot_bgcolor="white",
+            paper_bgcolor="white",
+            margin=dict(l=72, r=24, t=52, b=56),
+            height=height,
+            autosize=True,
+            hovermode="x unified",
+            showlegend=False,
+            font=dict(family="Inter"),
+        )
+        ref_width, ref_color, yshift = 1, "rgba(100, 116, 139, 0.55)", 12
+    else:
+        fig.update_layout(
+            title=dict(
+                text=title,
+                font=dict(size=14, color="#0f2d59", family="Inter")
+            ),
+            xaxis=dict(
+                title=dict(text=xaxis_title, font=dict(color="#64748b")),
+                gridcolor="#f1f5f9",
+                linecolor="#cbd5e1",
+                tickfont=dict(color="#64748b")
+            ),
+            yaxis=dict(
+                title=dict(text=yaxis_title, font=dict(color="#64748b")),
+                gridcolor="#e2e8f0",
+                linecolor="#cbd5e1",
+                tickfont=dict(color="#64748b"),
+                zeroline=False,
+                range=[y_min, y_max]
+            ),
+            plot_bgcolor="white",
+            paper_bgcolor="white",
+            margin=dict(l=15, r=15, t=40, b=15),
+            height=height,
+            hovermode="x unified"
+        )
+        ref_width, ref_color, yshift = 1.5, "#64748b", 10
+
+    x0 = df[date_col].min()
+    x1 = df[date_col].max()
+
     fig.add_shape(
         type="line",
-        x0=df[date_col].min(),
+        x0=x0,
         y0=100,
-        x1=df[date_col].max(),
+        x1=x1,
         y1=100,
-        line=dict(color="#64748b", width=1.5, dash="dash") # Clearer dashed line
+        line=dict(color=ref_color, width=ref_width, dash="dash"),
     )
-    
-    # Add annotation label for Base Index
+
     fig.add_annotation(
-        x=df[date_col].min(),
+        x=x0,
         y=100,
         text="Base Index = 100",
         showarrow=False,
-        yshift=10,
+        yshift=yshift,
         xanchor="left",
-        font=dict(size=10, color="#64748b", family='Inter')
+        font=dict(size=10, color="#64748b", family="Inter"),
     )
-    
+
     return fig
 
 def plot_grouped_bar_fares(df, route_col='route', fare_col='fare', airline_col='airline', title="Average Fare by Route & Airline"):
