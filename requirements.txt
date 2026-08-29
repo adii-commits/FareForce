@@ -1,2 +1,4 @@
-﻿streamlitnplotlynpandas
+﻿streamlit
+plotly
+pandas
 numpy
